@@ -5,6 +5,112 @@
 Simulate the S-parameters of an RF structure directly in the PCB editor of KiCad 10.0, with the [openEMS](https://openems.de) FDTD solver or the [EMerge](https://www.emerge-software.com) FEM solver.
 The geometry goes from the native board objects of KiCad to the model of the solver.
 
+## Linux installation and MCP configuration
+
+The local MCP (Model Context Protocol) server lets an AI assistant inspect a saved
+KiCad board and run RF simulations without opening the PCB editor. The current
+MCP adapter uses **openEMS**. The Linux headless workflow has been exercised with
+KiCad 10.0.7; GUI interaction has not yet been validated on Linux.
+
+### Install on Linux
+
+1. Install **KiCad 10** with its Python `pcbnew` bindings, Git, and Python venv
+   support. On Ubuntu/Debian, with a package source that provides KiCad 10:
+
+   ```sh
+   sudo apt update
+   sudo apt install kicad git python3-venv python3-pip
+   /usr/bin/python3 -c "import pcbnew; print(pcbnew.GetBuildVersion())"
+   ```
+
+   Check that the printed KiCad version is 10.x. If KiCad uses another Python
+   interpreter, use that interpreter for `RFSIM_KICAD_PYTHON` below.
+
+2. Clone this repository and install the MCP dependencies:
+
+   ```sh
+   git clone https://github.com/antonjan/kicad-rfsim.git
+   cd kicad-rfsim
+   python3 -m venv --system-site-packages .venv
+   .venv/bin/python -m pip install -r mcp_server/requirements.txt
+   ```
+
+3. Install [openEMS with its Python interface](https://docs.openems.de), including
+   CSXCAD. Use the Python interpreter belonging to that installation, and verify
+   its dependencies (replace the example path with your own):
+
+   ```sh
+   export RFSIM_PYTHON=/absolute/path/to/openEMS/venv/bin/python
+   "$RFSIM_PYTHON" -c "import CSXCAD, openEMS, numpy, h5py; print('openEMS ready')"
+   ```
+
+   The MCP environment, KiCad's Python, and the solver's Python can be separate.
+   Installing the MCP requirements alone does not install KiCad or openEMS.
+
+For the optional PCB editor plugin, install [the Linux RFsim package](dist/rfsim-1.3.0-linux.zip) through
+KiCad's **Plugin and Content Manager → Install from File**. KiCad's Python also
+needs `scikit-rf`, `matplotlib`, and `h5py` for GUI plots. Set `RFSIM_PYTHON` in the
+environment that launches KiCad. No plugin recompilation is required.
+
+### Configure an MCP client
+
+Add the following server entry to a client that supports local stdio MCP servers.
+Replace every `/absolute/path/...` value with an actual absolute path; merge the
+entry into any existing `mcpServers` configuration:
+
+```json
+{
+  "mcpServers": {
+    "rfsim": {
+      "command": "/absolute/path/to/kicad-rfsim/.venv/bin/python",
+      "args": ["/absolute/path/to/kicad-rfsim/mcp_server/server.py"],
+      "env": {
+        "RFSIM_PYTHON": "/absolute/path/to/openEMS/venv/bin/python",
+        "RFSIM_KICAD_PYTHON": "/usr/bin/python3",
+        "RFSIM_WORK_DIR": "/absolute/path/to/kicad-rfsim/runs"
+      }
+    }
+  }
+}
+```
+
+The exact configuration file location and format depend on the MCP client.
+Restart or reconnect the client after saving it. The client launches the server;
+no HTTP service or external account is required. `RFSIM_WORK_DIR` is optional
+and defaults to this repository's `runs/` directory. The server reads local board
+files and writes simulation artifacts with the permissions of its launching user.
+
+### What the MCP interface can do
+
+| Tool | Capability |
+|------|------------|
+| `inspect_board` | List pads and nets in a saved `.kicad_pcb` file to choose feeds. |
+| `prepare_simulation` | Extract board geometry into a new job; set ports, sweep frequencies, mesh, air margin, CPU threads, run limits, field frequency, and optional substrate overrides. |
+| `start_simulation` | Start a prepared openEMS job in the background. |
+| `simulation_status` | Read job status, recent solver logs, and artifact paths. |
+| `simulation_results` | Summarize each S-parameter trace's minimum, its frequency, and maximum; return Touchstone, far-field JSON, and line-data file paths when available. |
+| `cancel_simulation` | Stop a running job and keep its output files. |
+
+You can ask an assistant to inspect a board, choose up to 16 feed pads, prepare a
+frequency sweep, review the extracted model, run it, and report reflection or
+transmission results. Supported port types are lumped, microstrip (`msl`), coplanar
+(`cpw`), stripline, and coaxial; each must suit the board's feed geometry.
+For example:
+
+> Inspect `/absolute/path/to/filter.kicad_pcb` and prepare a 1–3 GHz simulation
+> using J1 pad 1 and J2 pad 1 as microstrip ports. Show the settings and warnings
+> before starting, then run it and report S11 and S21 with the Touchstone path.
+
+The interface operates on saved boards and does not edit PCB layouts. It runs
+one solver job at a time per server instance, and each prepared job gets a fresh
+output directory. After a server restart, previous running jobs have unknown
+status; their files remain on disk, but the results tool requires a successful
+job in the current session. For antennas, check feed geometry and compare finer
+meshes and larger air domains before relying on resonance or radiation results.
+
+See [Linux setup and MCP tools](docs/LINUX_MCP.md) for additional configuration,
+workflow details, and verification commands.
+
 ## Features
 
 - Use one of two solvers: openEMS (FDTD) or EMerge (FEM).
@@ -20,7 +126,7 @@ The geometry goes from the native board objects of KiCad to the model of the sol
 - Draw the board layout that the solver uses.
 - Set the substrate, the mesh preset and the CPU threads in the dialog.
 
-## Installation
+## Windows installation
 
 1) Download the [latest release ZIP file](https://github.com/NBalciunas/kicad-rfsim/releases).
 2) Open KiCad and in the main window click on "Plugin and Content Manager".
@@ -245,9 +351,3 @@ All the tests pass on the current version with openEMS and with EMerge, and [the
 
 This project is licensed under the MIT License.
 Copyright © 2026 Nojus Balčiūnas
-
-## Linux and MCP automation
-
-See [Linux setup and MCP tools](docs/LINUX_MCP.md) for the local stdio server,
-headless simulation workflow, and Codex registration. No plugin recompilation is
-required. The MCP adapter currently uses openEMS.
