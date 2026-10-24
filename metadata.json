@@ -27,7 +27,8 @@
             "status": "stable",
             "kicad_version": "10.0.0",
             "platforms": [
-                "windows"
+                "windows",
+                "linux"
             ]
         }
     ]

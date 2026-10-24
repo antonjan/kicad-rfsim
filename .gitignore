@@ -15,3 +15,8 @@ validation/*/out_*/
 validation/*/*.kicad_pcb
 validation/*/*.kicad_pro
 validation/*/*.kicad_prl
+
+# Local MCP simulations
+runs/
+
+dist/

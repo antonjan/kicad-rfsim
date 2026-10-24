@@ -245,3 +245,9 @@ All the tests pass on the current version with openEMS and with EMerge, and [the
 
 This project is licensed under the MIT License.
 Copyright © 2026 Nojus Balčiūnas
+
+## Linux and MCP automation
+
+See [Linux setup and MCP tools](docs/LINUX_MCP.md) for the local stdio server,
+headless simulation workflow, and Codex registration. No plugin recompilation is
+required. The MCP adapter currently uses openEMS.
